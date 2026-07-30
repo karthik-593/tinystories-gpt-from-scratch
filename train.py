@@ -8,15 +8,15 @@ Multi-GPU (if you have more than one):
     torchrun --nproc_per_node=2 train.py
 """
 
-import os, math, time, glob
+import os, math, time, glob, contextlib
 import numpy as np
 import torch
 import torch.distributed as dist
 from torch.nn.parallel  import DistributedDataParallel as DDP
 from torch.utils.data   import Dataset, DataLoader, DistributedSampler
 
-from model.config import ModelConfig
-from model.gpt    import GPT
+from config import ModelConfig
+from gpt    import GPT
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -142,30 +142,30 @@ def main():
         print(f"{'='*60}\n")
 
     # ── Dataset + DataLoader ──────────────────────────────────────────────────
-        train_dataset = ShardedDataset(cfg.data_dir, cfg.context_len, split="train")
-        val_dataset   = ShardedDataset(cfg.data_dir, cfg.context_len, split="val")
+    train_dataset = ShardedDataset(cfg.data_dir, cfg.context_len, split="train")
+    val_dataset   = ShardedDataset(cfg.data_dir, cfg.context_len, split="val")
 
-        train_sampler = DistributedSampler(train_dataset, world_size, rank, shuffle=True) if ddp else None
+    train_sampler = DistributedSampler(train_dataset, world_size, rank, shuffle=True) if ddp else None
 
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=cfg.batch_size,
-            sampler=train_sampler,
-            shuffle=(train_sampler is None),
-            num_workers=cfg.num_workers,
-            pin_memory=True,
-            persistent_workers=True,
-            drop_last=True,
-        )
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=cfg.batch_size,
+        sampler=train_sampler,
+        shuffle=(train_sampler is None),
+        num_workers=cfg.num_workers,
+        pin_memory=True,
+        persistent_workers=True,
+        drop_last=True,
+    )
 
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=cfg.batch_size,
-            shuffle=False,
-            num_workers=2,
-            pin_memory=True,
-            drop_last=True,
-        )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=cfg.batch_size,
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True,
+        drop_last=True,
+    )
     # ── Model ─────────────────────────────────────────────────────────────────
     model     = GPT(cfg).to(device)
     optimizer = model.configure_optimizer(cfg)
@@ -207,7 +207,7 @@ def main():
             try:
                 x, y = next(loader_iter)
             except StopIteration:
-                if ddp and sampler: sampler.set_epoch(step)
+                if ddp and train_sampler: train_sampler.set_epoch(step)
                 loader_iter = iter(train_loader)
                 x, y = next(loader_iter)
 
@@ -215,9 +215,9 @@ def main():
 
             # Sync grads only on last micro-step (DDP optimization)
             sync_ctx = model.no_sync() if (ddp and micro < cfg.grad_accum - 1) \
-                       else torch.cuda.amp.autocast(dtype=torch.bfloat16)
+                       else contextlib.nullcontext()
 
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            with sync_ctx, torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 _, loss = model(x, y)
 
             (loss / cfg.grad_accum).backward()
