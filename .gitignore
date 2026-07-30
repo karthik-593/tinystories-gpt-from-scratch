@@ -9,3 +9,6 @@ checkpoints_ft/
 
 # Pretraining token shards — regenerate via setup_data.py
 data/bin/
+
+# Evaluation outputs — regenerate via scripts/evaluate.py
+logs/

@@ -72,6 +72,16 @@ python scripts/inference.py --ckpt ckpt_best.pt                 # use the pretra
 
 Interactive REPL — enter an instruction (and optional input), then adjust generation params. In-session commands: `:temp <float>`, `:top_p <float>`, `:tokens <int>`, `:quit`.
 
+### Evaluation (optional)
+
+```bash
+python scripts/evaluate.py --ckpt ckpt_best.pt --n_stories 500
+# skip the two heaviest metrics if bert-score / mauve-text aren't installed:
+python scripts/evaluate.py --ckpt ckpt_best.pt --n_stories 500 --skip_bertscore --skip_mauve
+```
+
+Generates `n_stories` completions from held-out TinyStories prompts (the 25% not seen during pretraining) and scores them against the corresponding references: perplexity, BLEU-1..4, ROUGE-1/2/L, BERTScore, MAUVE, Distinct-1/2, 4-gram repetition rate, average length, and vocabulary coverage. Results are written to `logs/eval_results.csv` and the raw generations to `logs/generated_stories.txt`.
+
 ## Project layout
 
 ```
@@ -84,10 +94,12 @@ scripts/                         Entry-point scripts (run from the repo root)
   clean_data.py                    Cleans raw instruction data for fine-tuning
   finetune.py                      Instruction fine-tuning loop
   inference.py                     Interactive generation REPL
+  evaluate.py                      BLEU/ROUGE/BERTScore/MAUVE/diversity evaluation
 data/
   final_data.jsonl                 Raw instruction dataset
   final_data_cleaned.jsonl         Cleaned instruction dataset (fine-tuning input)
 tokenizer/tokenizer.json         Trained BPE tokenizer
 ckpt_best.pt                     Best pretrained checkpoint
 checkpoints_ft/                  Fine-tuned checkpoints
+logs/                            Evaluation outputs (gitignored)
 ```

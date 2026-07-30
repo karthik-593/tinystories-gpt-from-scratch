@@ -6,3 +6,10 @@ tqdm==4.67.3
 
 # Only needed once, for setup_data.py (downloads TinyStories from the Hub)
 datasets>=2.20
+
+# Only needed for scripts/evaluate.py
+nltk>=3.8
+rouge-score>=0.1.2
+bert-score>=0.3.13
+mauve-text>=0.3.0
+transformers>=4.40
