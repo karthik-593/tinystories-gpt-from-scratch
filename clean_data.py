@@ -5,7 +5,9 @@ Fixes applied:
   1. Remove exact duplicates (same instruction + same output)
   2. Cap repeated instructions to MAX_PER_INSTRUCTION outputs each
   3. Remove outputs shorter than MIN_OUTPUT_WORDS words
-  4. Truncate outputs longer than MAX_OUTPUT_WORDS words at sentence boundary
+  4. Truncate outputs that would overflow the model's context window, measured
+     in actual tokens against the exact prompt template finetune.py builds
+     (BOS + instruction/input + response + EOS), not a word-count guess
   5. Fix outputs missing ending punctuation
 
 Usage:
@@ -13,13 +15,20 @@ Usage:
     python clean_data.py --input final_data.jsonl --output final_data_cleaned.jsonl
 """
 
-import json, re, argparse
+import json, argparse
 from collections import defaultdict
+from tokenizers import Tokenizer
+
+from config import ModelConfig
 
 # -- Config --------------------------------------------------------------------
-MIN_OUTPUT_WORDS      = 10    # drop outputs shorter than this
-MAX_OUTPUT_WORDS      = 130   # truncate outputs longer than this (context_len=256 limit)
-MAX_PER_INSTRUCTION   = 5     # keep at most this many outputs per unique instruction
+MIN_OUTPUT_WORDS     = 10    # drop outputs shorter than this
+MAX_PER_INSTRUCTION  = 5     # keep at most this many outputs per unique instruction
+
+CFG            = ModelConfig()
+CONTEXT_LEN    = CFG.context_len            # kept in sync with the model config
+TOKENIZER_PATH = CFG.tokenizer_path
+MAX_SEQ_LEN    = CONTEXT_LEN + 1            # BOS + prompt + response + EOS budget
 
 
 # -- Helpers -------------------------------------------------------------------
@@ -27,21 +36,41 @@ def word_count(text: str) -> int:
     return len(text.split())
 
 
-def truncate_at_sentence(text: str, max_words: int) -> str:
-    """Truncate text to at most max_words words, ending at a sentence boundary."""
-    words = text.split()
-    if len(words) <= max_words:
-        return text
+def build_prefix(instruction: str, inp: str) -> str:
+    """Same prompt template finetune.py uses — must match exactly for the
+    token-length measurement below to reflect what fine-tuning will actually see."""
+    if inp.strip():
+        return (
+            f"### Instruction:\n{instruction}\n\n"
+            f"### Input:\n{inp}\n\n"
+            f"### Response:\n"
+        )
+    return f"### Instruction:\n{instruction}\n\n### Response:\n"
 
-    truncated = " ".join(words[:max_words])
-    # Walk back to find the last sentence-ending punctuation
+
+def token_length(tokenizer: Tokenizer, prefix: str, output: str) -> int:
+    """Full sequence length as finetune.py constructs it: BOS + prompt + response + EOS."""
+    return 1 + len(tokenizer.encode(prefix + output).ids) + 1
+
+
+def snap_to_sentence_end(text: str) -> str:
+    """Trim text back to the last sentence-ending punctuation (if past halfway), else hard-cut."""
     for punct in (".", "!", "?", '"', "'"):
-        idx = truncated.rfind(punct)
-        if idx > len(truncated) // 2:   # at least halfway through
-            return truncated[:idx + 1].strip()
+        idx = text.rfind(punct)
+        if idx > len(text) // 2:
+            return text[:idx + 1].strip()
+    return text.rstrip(",:;") + "."
 
-    # No sentence boundary found - hard cut and add period
-    return truncated.rstrip(",:;") + "."
+
+def fit_output_to_context(tokenizer: Tokenizer, prefix: str, output: str, context_len: int) -> str:
+    """Truncate output so BOS + prefix + output + EOS fits within context_len + 1 tokens."""
+    prefix_len = len(tokenizer.encode(prefix).ids)
+    budget     = context_len - 1 - prefix_len   # reserve 1 token each for BOS and EOS
+    output_ids = tokenizer.encode(output).ids
+    if len(output_ids) <= budget:
+        return output
+    truncated_text = tokenizer.decode(output_ids[:max(budget, 0)]).strip()
+    return snap_to_sentence_end(truncated_text)
 
 
 def fix_ending_punctuation(text: str) -> str:
@@ -58,6 +87,8 @@ def main():
     parser.add_argument("--input",  default="final_data.jsonl")
     parser.add_argument("--output", default="final_data_cleaned.jsonl")
     args = parser.parse_args()
+
+    tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
 
     # Load
     raw = []
@@ -97,17 +128,23 @@ def main():
     # -- Steps 3–5: Length filter, truncation, punctuation fix ----------------
     cleaned = []
     for s in capped:
-        output = s.get("output", "").strip()
+        instruction = s.get("instruction", "").strip()
+        inp         = s.get("input", "").strip()
+        output      = s.get("output", "").strip()
 
         # Step 3: Drop very short outputs
         if word_count(output) < MIN_OUTPUT_WORDS:
             stats["removed_short"] += 1
             continue
 
-        # Step 4: Truncate long outputs at sentence boundary
-        if word_count(output) > MAX_OUTPUT_WORDS:
-            output = truncate_at_sentence(output, MAX_OUTPUT_WORDS)
+        # Step 4: Truncate outputs that would overflow the model's context window
+        prefix = build_prefix(instruction, inp)
+        if token_length(tokenizer, prefix, output) > MAX_SEQ_LEN:
+            output = fit_output_to_context(tokenizer, prefix, output, CONTEXT_LEN)
             stats["truncated"] += 1
+            if word_count(output) < MIN_OUTPUT_WORDS:
+                stats["removed_after_truncation"] += 1
+                continue
 
         # Step 5: Fix missing ending punctuation
         fixed = fix_ending_punctuation(output)
@@ -116,13 +153,14 @@ def main():
         output = fixed
 
         cleaned.append({
-            "instruction": s.get("instruction", "").strip(),
-            "input":       s.get("input", "").strip(),
+            "instruction": instruction,
+            "input":       inp,
             "output":      output,
         })
 
     print(f"Step 3 - Removed short outputs (<{MIN_OUTPUT_WORDS}w)  : -{stats['removed_short']:,}  -> {len(cleaned):,} remain")
-    print(f"Step 4 - Truncated long outputs (>{MAX_OUTPUT_WORDS}w)  :  {stats['truncated']:,} modified")
+    print(f"Step 4 - Truncated outputs exceeding context budget ({MAX_SEQ_LEN} tok) : {stats['truncated']:,} modified"
+          f"  (-{stats['removed_after_truncation']:,} dropped, too short after truncation)")
     print(f"Step 5 - Fixed ending punctuation       :  {stats['punct_fixed']:,} modified")
 
     # -- Write output ----------------------------------------------------------
@@ -137,11 +175,20 @@ def main():
 
     # -- Quick sanity check ----------------------------------------------------
     out_lens = [word_count(s["output"]) for s in cleaned]
-    print(f"\n  Output length after cleaning:")
     n = len(out_lens)
     out_lens.sort()
+    print(f"\n  Output length after cleaning (words):")
     print(f"    min={out_lens[0]}  max={out_lens[-1]}  mean={sum(out_lens)/n:.1f}  "
           f"p50={out_lens[n//2]}  p95={out_lens[int(n*0.95)]}")
+
+    seq_lens = sorted(
+        token_length(tokenizer, build_prefix(s["instruction"], s["input"]), s["output"])
+        for s in cleaned
+    )
+    over_budget = sum(1 for l in seq_lens if l > MAX_SEQ_LEN)
+    print(f"\n  Full sequence length (tokens, BOS+prompt+response+EOS) vs budget={MAX_SEQ_LEN}:")
+    print(f"    max={seq_lens[-1]}  p99={seq_lens[int(n*0.99)]}")
+    print(f"    Samples still exceeding budget: {over_budget}  (should be 0)")
 
     from collections import Counter
     inst_freq = Counter(s["instruction"] for s in cleaned)
