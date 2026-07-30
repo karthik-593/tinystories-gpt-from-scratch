@@ -1,0 +1,8 @@
+# Core
+torch==2.11.0
+numpy==2.4.4
+tokenizers==0.22.2
+tqdm==4.67.3
+
+# Only needed once, for setup_data.py (downloads TinyStories from the Hub)
+datasets>=2.20

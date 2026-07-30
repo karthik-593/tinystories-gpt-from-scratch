@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+
+# Checkpoints — large binaries, regenerate via train.py / finetune.py
+*.pt
+checkpoints/
+checkpoints_ft/
+
+# Pretraining token shards — regenerate via setup_data.py
+data/bin/
