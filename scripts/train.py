@@ -17,6 +17,12 @@ import torch.distributed as dist
 from torch.nn.parallel  import DistributedDataParallel as DDP
 from torch.utils.data   import Dataset, DataLoader, DistributedSampler
 
+# Avoid UnicodeEncodeError on Windows consoles/pipes using a legacy codepage
+# (the banners below use box-drawing and arrow characters).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.config import ModelConfig
 from model.gpt    import GPT

@@ -12,6 +12,12 @@ import torch
 import torch.nn.functional as F
 from tokenizers import Tokenizer
 
+# Avoid UnicodeEncodeError on Windows consoles/pipes using a legacy codepage
+# (arrow characters are used in the output below).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.config import ModelConfig
 from model.gpt import GPT

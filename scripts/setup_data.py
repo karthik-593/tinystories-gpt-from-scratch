@@ -16,10 +16,16 @@ Outputs:
     data/bin/val_shard_XXXX.bin     ← uint16 token ID val shards
 """
 
-import os
+import os, sys
 import numpy as np
 from datasets   import load_dataset
 from tokenizers import Tokenizer
+
+# Avoid UnicodeEncodeError on Windows consoles/pipes using a legacy codepage
+# (arrow characters are used in the output below).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from tokenizers.models          import BPE
 from tokenizers.trainers        import BpeTrainer
 from tokenizers.pre_tokenizers  import ByteLevel

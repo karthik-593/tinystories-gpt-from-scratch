@@ -15,6 +15,12 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, random_split
 from tokenizers import Tokenizer
 
+# Avoid UnicodeEncodeError on Windows consoles/pipes using a legacy codepage
+# (the banners below use box-drawing and arrow characters).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.config import ModelConfig
 from model.gpt import GPT
