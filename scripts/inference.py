@@ -1,18 +1,20 @@
 """
 inference.py — Interactive generation with the fine-tuned GPT model
 ────────────────────────────────────────────────────────────────────
-Usage:
-    python inference.py
-    python inference.py --ckpt checkpoints_ft/ft_ckpt_best.pt
-    python inference.py --ckpt ckpt_best.pt   # use pretrained instead
+Usage (from the repo root):
+    python scripts/inference.py
+    python scripts/inference.py --ckpt checkpoints_ft/ft_ckpt_best.pt
+    python scripts/inference.py --ckpt ckpt_best.pt   # use pretrained instead
 """
 
-import argparse, sys, time, re
+import argparse, os, sys, time, re
 import torch
 import torch.nn.functional as F
 from tokenizers import Tokenizer
-from config import ModelConfig
-from gpt import GPT
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from model.config import ModelConfig
+from model.gpt import GPT
 
 
 DEFAULT_CKPT = "checkpoints_ft/ft_ckpt_best.pt"

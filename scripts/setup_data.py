@@ -7,8 +7,8 @@ Run this ONCE before training. It:
   3. Tokenises all stories → packed .bin shards ready for training
      Each story is wrapped as:  [BOS] [tokens...] [EOS]
 
-Usage:
-    python setup_data.py
+Usage (from the repo root):
+    python scripts/setup_data.py
 
 Outputs:
     tokenizer/tokenizer.json        ← saved tokeniser (needed at inference too)
@@ -154,4 +154,4 @@ print(f"  Val   shards : {val_stats['shards']}   "
       f"({val_stats['tokens']/1e6:.1f}M tokens)")
 print(f"  Data dir     : {DATA_OUT_DIR}/")
 print(f"  Tokeniser    : {TOKENIZER_OUT}")
-print(f"\nAll set! Run  python train.py  to start pretraining.")
+print(f"\nAll set! Run  python scripts/train.py  to start pretraining.")

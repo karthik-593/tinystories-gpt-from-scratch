@@ -1,11 +1,11 @@
 """
 finetune.py — Instruction fine-tuning for the custom GPT model
 ───────────────────────────────────────────────────────────────
-Loads ckpt_best.pt and fine-tunes on cleaned_data_final.jsonl
+Loads ckpt_best.pt and fine-tunes on data/final_data_cleaned.jsonl
 using masked next-token prediction (loss only on response tokens).
 
-Usage:
-    python finetune.py
+Usage (from the repo root):
+    python scripts/finetune.py
 """
 
 import os, math, json, time, sys
@@ -15,13 +15,14 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, random_split
 from tokenizers import Tokenizer
 
-from config import ModelConfig
-from gpt import GPT
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from model.config import ModelConfig
+from model.gpt import GPT
 
 
 # ── Fine-tune hyperparameters ────────────────────────────────────────────────
 PRETRAINED_CKPT = "ckpt_best.pt"
-DATA_PATH       = "final_data_cleaned.jsonl"
+DATA_PATH       = "data/final_data_cleaned.jsonl"
 TOKENIZER_PATH  = "tokenizer/tokenizer.json"
 CKPT_DIR        = "checkpoints_ft"
 

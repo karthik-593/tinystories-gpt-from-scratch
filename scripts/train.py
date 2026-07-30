@@ -1,22 +1,25 @@
 """
 train.py  —  tuned for RTX 4060 Ti 16GB
 ─────────────────────────────────────────
+Run from the repo root:
+
 Single GPU:
-    python train.py
+    python scripts/train.py
 
 Multi-GPU (if you have more than one):
-    torchrun --nproc_per_node=2 train.py
+    torchrun --nproc_per_node=2 scripts/train.py
 """
 
-import os, math, time, glob, contextlib
+import os, sys, math, time, glob, contextlib
 import numpy as np
 import torch
 import torch.distributed as dist
 from torch.nn.parallel  import DistributedDataParallel as DDP
 from torch.utils.data   import Dataset, DataLoader, DistributedSampler
 
-from config import ModelConfig
-from gpt    import GPT
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from model.config import ModelConfig
+from model.gpt    import GPT
 
 
 # ─────────────────────────────────────────────────────────────────────────────

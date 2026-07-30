@@ -10,16 +10,17 @@ Fixes applied:
      (BOS + instruction/input + response + EOS), not a word-count guess
   5. Fix outputs missing ending punctuation
 
-Usage:
-    python clean_data.py
-    python clean_data.py --input final_data.jsonl --output final_data_cleaned.jsonl
+Usage (from the repo root):
+    python scripts/clean_data.py
+    python scripts/clean_data.py --input data/final_data.jsonl --output data/final_data_cleaned.jsonl
 """
 
-import json, argparse
+import json, os, sys, argparse
 from collections import defaultdict
 from tokenizers import Tokenizer
 
-from config import ModelConfig
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from model.config import ModelConfig
 
 # -- Config --------------------------------------------------------------------
 MIN_OUTPUT_WORDS     = 10    # drop outputs shorter than this
@@ -84,8 +85,8 @@ def fix_ending_punctuation(text: str) -> str:
 # -- Main ----------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input",  default="final_data.jsonl")
-    parser.add_argument("--output", default="final_data_cleaned.jsonl")
+    parser.add_argument("--input",  default="data/final_data.jsonl")
+    parser.add_argument("--output", default="data/final_data_cleaned.jsonl")
     args = parser.parse_args()
 
     tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
